@@ -1,0 +1,73 @@
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <ESP32Servo.h>
+
+const char* ssid = "Το_όνομα_του_δικτύου";
+const char* password = "Ο_κωδικός_του_δικτύου";
+
+IPAddress ip(192, 168, 1, 101); // Στατική IP του ESP32 #2
+IPAddress remoteIP(192, 168, 1, 100); // IP του ESP32 #1
+unsigned int port = 12345; // Θύρα UDP
+
+WiFiUDP udp;
+Servo servo1; // Yaw
+Servo servo2; // Pitch
+Servo servo3; // Roll
+//Servo servo4; // Throttle
+
+int throttleValue;
+int yawValue;
+int pitchValue;
+int rollValue;
+
+void setup() {
+  Serial.begin(115200);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+
+  Serial.println("Connected to WiFi");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  udp.begin(port);
+
+  servo1.attach(34); // Ακροδέκτης για τον έλεγχο του servo Yaw
+  servo2.attach(35); // Ακροδέκτης για τον έλεγχο του servo Pitch
+  servo3.attach(32); // Ακροδέκτης για τον έλεγχο του servo Roll
+  //servo4.attach(33); // Ακροδέκτης για τον έλεγχο του servo Throttle
+  
+  ledcSetup(0, 50, 10); // Κανάλι 0, 50Hz, 10-bit ακρίβεια
+  ledcAttachPin(33, 0); // Ακροδέκτης 33 για τον έλεγχο του throttle με τον ακροδέκτη PWM
+}
+
+void loop() {
+  // Ανάγνωση των τιμών από το UDP πακέτο
+  int packetSize = udp.parsePacket();
+  if (packetSize) {
+    udp.read((uint8_t*)&throttleValue, sizeof(throttleValue));
+    udp.read((uint8_t*)&yawValue, sizeof(yawValue));
+    udp.read((uint8_t*)&pitchValue, sizeof(pitchValue));
+    udp.read((uint8_t*)&rollValue, sizeof(rollValue));
+
+    // Κίνηση των servo με τις μετατραπείσμενες γωνίες
+    int yawAngle = map(yawValue, 0, 1023, 0, 180);
+    int pitchAngle = map(pitchValue, 0, 1023, 0, 180);
+    int rollAngle = map(rollValue, 0, 1023, 0, 180);
+    //int throttleAngle = map(throttleValue, 0, 1023, 0, 180);
+
+    servo1.write(yawAngle);
+    servo2.write(pitchAngle);
+    servo3.write(rollAngle);
+    //servo4.write(throttleAngle);
+	
+	// Κίνηση του ακροδέκτη PWM για τον έλεγχο του throttle
+    int throttlePWM = map(throttleValue, 0, 1023, 0, 1023);
+    ledcWrite(0, throttlePWM);
+  }
+
+  delay(100);
+}
